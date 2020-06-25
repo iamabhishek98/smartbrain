@@ -2,32 +2,28 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const bcrypt = require("bcrypt-nodejs");
 const cors = require("cors");
+const knex = require("knex");
+
+const db = knex({
+  client: "pg",
+  connection: {
+    host: "127.0.0.1", // localhost
+    user: "abhishek",
+    database: "smartbrain",
+    password: "password",
+  },
+});
+
+db.select("*")
+  .from("users")
+  .then((data) => {
+    console.log(data);
+  });
 
 const app = express();
 
 app.use(bodyParser.json());
 app.use(cors());
-
-const database = {
-  users: [
-    {
-      id: "123",
-      name: "John",
-      email: "john@gmail.com",
-      password: "cookies",
-      entries: 0,
-      joined: new Date(),
-    },
-    {
-      id: "13",
-      name: "Sally",
-      email: "Sally@gmail.com",
-      password: "cream",
-      entries: 0,
-      joined: new Date(),
-    },
-  ],
-};
 
 const port = 3001;
 
@@ -44,62 +40,82 @@ app.post("/signin", (req, res) => {
   //   res.json("signing");
   const email = req.body.email;
   const password = req.body.password;
-  if (
-    email == database.users[0].email &&
-    password === database.users[0].password
-  ) {
-    console.log("success");
-    res.json(database.users[0]);
-  } else {
-    console.log("failure");
-    res.status(400).json("error logging in");
-  }
+  db.select("email", "hash")
+    .from("login")
+    .where("email", "=", email)
+    .then((data) => {
+      const isValid = bcrypt.compareSync(password, data[0].hash);
+      if (isValid) {
+        return db
+          .select("*")
+          .from("users")
+          .where("email", "=", email)
+          .then((user) => {
+            res.json(user[0]);
+          })
+          .catch((err) => res.status(400).json("unable to retrieve user"));
+      } else {
+        throw err;
+      }
+    })
+    .catch((err) => res.status(400).json("wrong credentials"));
 });
 
 // register
 app.post("/register", (req, res) => {
   const { name, email, password } = req.body;
+  const hash = bcrypt.hashSync(password);
 
-  database.users.push({
-    id: "125",
-    name: name,
-    email: email,
-    password: password,
-    entries: 0,
-    joined: new Date(),
+  // create a transaction when you wanna do more than 2 things at once
+  // and use the trx objects to do the db operations
+  db.transaction((trx) => {
+    trx
+      .insert({
+        hash: hash,
+        email: email,
+      })
+      .into("login")
+      .returning("email")
+      .then((loginEmail) => {
+        return trx("users")
+          .returning("*")
+          .insert({
+            name: name,
+            email: loginEmail[0],
+            joined: new Date(),
+          })
+          .then((user) => res.json(user[0]))
+          .catch((err) => res.status(400).json("unable to register"));
+      })
+      .then(trx.commit)
+      // rollback just reverses the changes if its runs into an error
+      .catch(trx.rollback);
   });
-
-  res.json(database.users[database.users.length - 1]);
-  console.log(database.users);
-  //   res.json("success");
 });
 
 // profile/:userId
 app.get("/profile/:id", (req, res) => {
   const { id } = req.params;
-  let found = false;
-  database.users.forEach((user) => {
-    if (user.id === id) {
-      found = true;
-      return res.json(user);
-    }
-  });
-  if (!found) res.status(400).json("no such user");
+  db.select("*")
+    .from("users")
+    .where({ id })
+    .then((user) => {
+      if (user.length == 0) throw err;
+      res.json(user[0]);
+    })
+    .catch((err) => res.status(400).json("not found"));
 });
 
 // image
 app.put("/image", (req, res) => {
   const { id } = req.body;
-  let found = false;
-  database.users.forEach((user) => {
-    if (user.id === id) {
-      found = true;
-      user.entries++;
-      console.log(user.entries);
-      return res.json(user.entries);
-    }
-  });
-  if (!found) res.status(400).json("no such user");
+
+  db("users")
+    .where("id", "=", id)
+    .increment("entries", 1)
+    .returning("entries")
+    .then((entries) => res.json(entries[0]))
+    .catch((err) => res.status(400).json("unable to get entries"));
 });
 
 /*
