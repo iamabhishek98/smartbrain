@@ -2,6 +2,10 @@ const handleSignin = (db, bcrypt) => (req, res) => {
   //   res.json("signing");
   const email = req.body.email;
   const password = req.body.password;
+
+  if (!email || !password)
+    return res.status(400).json("incorrect form submission");
+
   db.select("email", "hash")
     .from("login")
     .where("email", "=", email)

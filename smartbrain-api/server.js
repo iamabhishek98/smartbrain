@@ -2,6 +2,8 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const bcrypt = require("bcrypt-nodejs");
 const cors = require("cors");
+const dotenv = require("dotenv");
+dotenv.config();
 const knex = require("knex");
 
 const signin = require("./controllers/signin");
@@ -24,10 +26,8 @@ const app = express();
 app.use(bodyParser.json());
 app.use(cors());
 
-const port = 3001;
-
-app.listen(port, () => {
-  console.log("Listening on port", port);
+app.listen(process.env.PORT, () => {
+  console.log(`Listening on port ${process.env.PORT}`);
 });
 
 app.get("/", (res, req) => {
@@ -49,6 +49,9 @@ app.get("/profile/:id", (req, res) => {
 app.put("/image", (req, res) => {
   image.handleImage(req, res, db);
 });
+
+// image
+app.post("/imageurl", image.handleApiCall);
 
 /*
 let i = "apples";
