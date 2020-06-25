@@ -2,8 +2,7 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const bcrypt = require("bcrypt-nodejs");
 const cors = require("cors");
-const dotenv = require("dotenv");
-dotenv.config();
+const { port } = require("./config");
 const knex = require("knex");
 
 const signin = require("./controllers/signin");
@@ -26,8 +25,8 @@ const app = express();
 app.use(bodyParser.json());
 app.use(cors());
 
-app.listen(process.env.PORT, () => {
-  console.log(`Listening on port ${process.env.PORT}`);
+app.listen(port, () => {
+  console.log(`Listening on port ${port}`);
 });
 
 app.get("/", (res, req) => {
