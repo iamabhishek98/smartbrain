@@ -4,6 +4,11 @@ const bcrypt = require("bcrypt-nodejs");
 const cors = require("cors");
 const knex = require("knex");
 
+const signin = require("./controllers/signin");
+const register = require("./controllers/register");
+const profile = require("./controllers/profile");
+const image = require("./controllers/image");
+
 const db = knex({
   client: "pg",
   connection: {
@@ -13,12 +18,6 @@ const db = knex({
     password: "password",
   },
 });
-
-db.select("*")
-  .from("users")
-  .then((data) => {
-    console.log(data);
-  });
 
 const app = express();
 
@@ -36,86 +35,19 @@ app.get("/", (res, req) => {
 });
 
 // signin (post because we dont want the password to be visible)
-app.post("/signin", (req, res) => {
-  //   res.json("signing");
-  const email = req.body.email;
-  const password = req.body.password;
-  db.select("email", "hash")
-    .from("login")
-    .where("email", "=", email)
-    .then((data) => {
-      const isValid = bcrypt.compareSync(password, data[0].hash);
-      if (isValid) {
-        return db
-          .select("*")
-          .from("users")
-          .where("email", "=", email)
-          .then((user) => {
-            res.json(user[0]);
-          })
-          .catch((err) => res.status(400).json("unable to retrieve user"));
-      } else {
-        throw err;
-      }
-    })
-    .catch((err) => res.status(400).json("wrong credentials"));
-});
+app.post("/signin", signin.handleSignin(db, bcrypt));
 
 // register
-app.post("/register", (req, res) => {
-  const { name, email, password } = req.body;
-  const hash = bcrypt.hashSync(password);
-
-  // create a transaction when you wanna do more than 2 things at once
-  // and use the trx objects to do the db operations
-  db.transaction((trx) => {
-    trx
-      .insert({
-        hash: hash,
-        email: email,
-      })
-      .into("login")
-      .returning("email")
-      .then((loginEmail) => {
-        return trx("users")
-          .returning("*")
-          .insert({
-            name: name,
-            email: loginEmail[0],
-            joined: new Date(),
-          })
-          .then((user) => res.json(user[0]))
-          .catch((err) => res.status(400).json("unable to register"));
-      })
-      .then(trx.commit)
-      // rollback just reverses the changes if its runs into an error
-      .catch(trx.rollback);
-  });
-});
+app.post("/register", register.handleRegister(db, bcrypt));
 
 // profile/:userId
 app.get("/profile/:id", (req, res) => {
-  const { id } = req.params;
-  db.select("*")
-    .from("users")
-    .where({ id })
-    .then((user) => {
-      if (user.length == 0) throw err;
-      res.json(user[0]);
-    })
-    .catch((err) => res.status(400).json("not found"));
+  profile.handleProfile(req, res, db);
 });
 
 // image
 app.put("/image", (req, res) => {
-  const { id } = req.body;
-
-  db("users")
-    .where("id", "=", id)
-    .increment("entries", 1)
-    .returning("entries")
-    .then((entries) => res.json(entries[0]))
-    .catch((err) => res.status(400).json("unable to get entries"));
+  image.handleImage(req, res, db);
 });
 
 /*
